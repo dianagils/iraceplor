@@ -64,10 +64,18 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
                                 best_color = "#08bfaa", xlab ="Configurations", boxplot = FALSE, 
                                 filename = NULL, interactive = base::interactive())
 {
+  # Transpose the matrix so that configurations are in columns and instances in rows
+  experiments <- t(experiments)
+  
+  # Ensure column names are characters
+  colnames(experiments) <- as.character(colnames(experiments))
+  
   type <- match.arg(type)
+  
   if (!is.matrix(experiments) && !is.data.frame(experiments)) {
     cli_abort("'{.field experiments}' must be a matrix or a data frame")
   }
+  
   inst_ids <- rownames(experiments)
   if (is.null(inst_ids)) inst_ids <- as.character(1:nrow(experiments))
   
@@ -78,7 +86,7 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
   
   # Get the order of configurations
   if (is.null(allElites)) {
-    cli_alert_info("Note: {.field allElites} not provided, assumming all configurations in experiments as elites.\n")
+    cli_alert_info("Note: {.field allElites} not provided, assuming all configurations in experiments as elites.\n")
     allElites <- list()
     allElites[[1L]] <- get_ranked_ids(experiments)
     if (type == "ibest") {
@@ -107,14 +115,14 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
       stop("Missing iteration elites data in experiments matrix")
     v_allElites <- as.character(iterationElites)
   }
-  # FIXME: It doesn't make sense to rename experiments to data. Just use either
-  # of the names.
-  experiments <- as.data.frame(experiments[,v_allElites, drop=FALSE])
+  
+  # Prepare data for plotting
+  experiments <- as.data.frame(experiments[, v_allElites, drop = FALSE])
   names_col <- colnames(experiments)
+  
   # If we only have one row, then don't try to plot boxplots.
   plot_points <- (nrow(experiments) == 1L)
 
-  # FIXME: This is too complicated and unclear.
   reshape_data <- function(x, elites) {
     out <- NULL
     for (i in seq_along(elites)) {
@@ -132,6 +140,7 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
     }
     out
   }
+
   # Get the experiment data together with the iterations
   if (is.list(allElites)) {
     experiments <- reshape_data(experiments, if (type == "all") allElites else iterationElites)
@@ -161,16 +170,14 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
       }
     } 
   } 
+  
   experiments$ids_f <- factor(experiments$ids, levels = unique(experiments$ids))
-  # FIXME: This should include the instance and seed.
-  # experiments$label <- paste0("Iteration: ", experiments$iteration_f, "\nValue: ", experiments$performance, "\n")
-  # FIXME: Simplify these conditions to avoid repetitions.
+  
   if (type == "ibest") {
     p <- ggplot(experiments, aes(x = .data$ids_f, y = .data$performance, colour = .data$iteration_f)) +
       labs(subtitle = "Iterations") +
       theme(plot.subtitle = element_text(hjust = 0.5))
   } else {
-    # type="all"
     if (first_is_best) {
       p <- ggplot(experiments, aes(x = .data$ids_f, y = .data$performance, colour = .data$best_conf)) +
         scale_color_manual(values=c(best_color, "#999999"))
@@ -192,7 +199,6 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
   if (plot_points) {
     p <- p + geom_point(shape = 16, na.rm = TRUE)
   } else {
-    # FIXME: Plot mean as a dashed line
     if (boxplot)
       p <- p + geom_boxplot()
     else
@@ -200,20 +206,17 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
     if (show_points)
       p <- p + geom_jitter(shape = 16, position = position_jitter(0.2), alpha=0.2, na.rm = TRUE)
   }
+  
   ylab <- if (rpd) "RPD (%)" else "Cost (raw)"
   p <- p + theme(legend.position = "none") + labs(x = xlab, y = ylab)
       
-  # each box plot is divided by iteration
   if (is.list(allElites)) {
     p <- p + facet_grid(cols = ggplot2::vars(experiments$iteration_f), scales = "free")
   }
   
-  # If the value in filename is added the pdf file is created
   if (!is.null(filename)) ggsave(filename, plot = p)
  
   if (interactive) {
-    # FIXME: ggplotly does not work well with geom_violin(): https://github.com/plotly/plotly.R/issues/1400
-    # We need to create the violin plot directly in plotly: https://plotly.com/r/violin/
     if (!boxplot)
       p <- p + geom_boxplot(color="gray20", fill=NA, outlier.shape = NA)
     p <- plotly::ggplotly(p)
@@ -221,8 +224,7 @@ boxplot_performance <- function(experiments, allElites= NULL, type = c("all", "i
   p
 }
 
-get_ranked_ids <- function(experiments)
-{
+get_ranked_ids <- function(experiments) {
   allElites <- c()
   naExp <- sort(colSums(!is.na(experiments)), decreasing = TRUE)
   for (r in unique(naExp)) {
